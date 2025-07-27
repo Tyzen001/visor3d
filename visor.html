@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Visor 3D Interactivo</title>
+  <style>
+    /* --- ESTILOS CSS --- */
+    body {
+      height: 100vh;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      background-color: #000000;
+      color: #ffffff;
+      font-family: monospace;
+    }
+
+    canvas {
+      width: 80%;
+      max-width: 900px;
+      height: auto;
+      aspect-ratio: 16/9;
+      background-color: #1a1a1a;
+      border-radius: 8px;
+      cursor: grab;
+    }
+
+    canvas:active {
+      cursor: grabbing;
+    }
+
+    p {
+      margin-top: 15px;
+      font-size: 1em;
+    }
+
+    /* --- NUEVO: Estilos para los Sliders --- */
+    .controles-slider {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-top: 20px;
+      width: 80%;
+      max-width: 900px;
+    }
+
+    .control-individual {
+      display: flex;
+      align-items: center;
+      width: 100%;
+      margin-bottom: 10px;
+    }
+
+    .control-individual label {
+      margin-right: 15px;
+      width: 80px; /* Ancho fijo para alinear los sliders */
+    }
+    
+    input[type="range"] {
+      width: 100%;
+      cursor: pointer;
+    }
+    /* --- Fin de nuevos estilos --- */
+
+  </style>
+</head>
+<body>
+
+  <canvas id="visor-canvas"></canvas>
+  <p>Arrastra para rotar o usa los controles deslizantes</p>
+
+  <!-- --- NUEVO: Contenedor para los Sliders --- -->
+  <div class="controles-slider">
+    <div class="control-individual">
+      <label for="horizontal-slider">Horizontal:</label>
+      <input type="range" min="1" value="1" id="horizontal-slider">
+    </div>
+    <div class="control-individual">
+      <label for="vertical-slider">Vertical:</label>
+      <input type="range" min="1" value="1" id="vertical-slider">
+    </div>
+  </div>
+
+
+  <script>
+    // --- CÓDIGO JAVASCRIPT ---
+    const totalImagenesHorizontales = 85;
+    const totalImagenesVerticales = 85;
+    const rutaHorizontal = 'images/producto_1/horizontal/';
+    const rutaVertical = 'images/producto_1/vertical/';
+    const extensionesPosibles = ['.jpeg', '.jpg', '.png', '.webp'];
+
+    const canvas = document.getElementById('visor-canvas');
+    const ctx = canvas.getContext('2d');
+    
+    // --- NUEVO: Obtener los sliders ---
+    const sliderH = document.getElementById('horizontal-slider');
+    const sliderV = document.getElementById('vertical-slider');
+
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+
+    const imagenesHorizontales = [];
+    const imagenesVerticales = [];
+    let cargaCompleta = false;
+    let imagenActivaX = 1;
+    let imagenActivaY = 1;
+
+    function cargarImagenConExtensiones(rutaBase, nombreArchivo, enExito, enError) {
+      const img = new Image();
+      let indiceExtension = 0;
+      function probarSiguienteExtension() {
+        if (indiceExtension >= extensionesPosibles.length) {
+          console.error(`Error: No se pudo encontrar la imagen ${nombreArchivo} en ${rutaBase}`);
+          enError();
+          return;
+        }
+        const url = `${rutaBase}${nombreArchivo}${extensionesPosibles[indiceExtension]}`;
+        img.src = url;
+        indiceExtension++;
+      }
+      img.onload = () => enExito(img);
+      img.onerror = probarSiguienteExtension;
+      probarSiguienteExtension();
+    }
+
+    function precargarImagenes() {
+      let totalImagenes = totalImagenesHorizontales + totalImagenesVerticales;
+      let imagenesCargadas = 0;
+      const alCargarUnaImagen = () => {
+        imagenesCargadas++;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = 'white';
+        ctx.textAlign = 'center';
+        ctx.fillText(`Cargando ${imagenesCargadas} / ${totalImagenes}...`, canvas.width / (2*dpr), canvas.height / (2*dpr));
+        if (imagenesCargadas === totalImagenes) iniciarVisor();
+      };
+      const alOcurrirError = () => { totalImagenes--; if (imagenesCargadas === totalImagenes) iniciarVisor(); };
+      for (let i = 1; i <= totalImagenesHorizontales; i++) {
+        const nombreArchivo = `frame-${i.toString().padStart(5, '0')}`;
+        cargarImagenConExtensiones(rutaHorizontal, nombreArchivo, (img) => { imagenesHorizontales[i] = img; alCargarUnaImagen(); }, alOcurrirError);
+      }
+      for (let i = 1; i <= totalImagenesVerticales; i++) {
+        const nombreArchivo = `frame-${i.toString().padStart(5, '0')}`;
+        cargarImagenConExtensiones(rutaVertical, nombreArchivo, (img) => { imagenesVerticales[i] = img; alCargarUnaImagen(); }, alOcurrirError);
+      }
+    }
+
+    function dibujarImagen(imagen) {
+      if (imagen && imagen.complete) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(imagen, 0, 0, canvas.width / dpr, canvas.height / dpr);
+      }
+    }
+
+    function iniciarVisor() {
+      cargaCompleta = true;
+      // --- NUEVO: Configurar los valores máximos de los sliders ---
+      sliderH.max = totalImagenesHorizontales;
+      sliderV.max = totalImagenesVerticales;
+      
+      dibujarImagen(imagenesHorizontales[1] || imagenesVerticales[1]);
+      
+      let arrastrando = false;
+      let inicioX, inicioY;
+      const sensibilidad = 2;
+
+      // --- LÓGICA DE LOS SLIDERS ---
+      sliderH.addEventListener('input', (e) => {
+        imagenActivaX = parseInt(e.target.value);
+        dibujarImagen(imagenesHorizontales[imagenActivaX]);
+      });
+
+      sliderV.addEventListener('input', (e) => {
+        imagenActivaY = parseInt(e.target.value);
+        dibujarImagen(imagenesVerticales[imagenActivaY]);
+      });
+
+      // --- LÓGICA DEL MOUSE ---
+      canvas.addEventListener('mousedown', (e) => { arrastrando = true; inicioX = e.clientX; inicioY = e.clientY; canvas.style.cursor = 'grabbing'; });
+      canvas.addEventListener('mouseup', () => { arrastrando = false; canvas.style.cursor = 'grab'; });
+      canvas.addEventListener('mouseleave', () => { arrastrando = false; canvas.style.cursor = 'grab'; });
+
+      canvas.addEventListener('mousemove', (e) => {
+        if (!arrastrando || !cargaCompleta) return;
+        const deltaX = e.clientX - inicioX;
+        const deltaY = e.clientY - inicioY;
+        let ultimaImagenMostrada;
+
+        if (Math.abs(deltaX) > Math.abs(deltaY)) {
+          const cambioImagenX = Math.floor(deltaX / (canvas.clientWidth / (totalImagenesHorizontales / sensibilidad)));
+          let nuevoIndexX = imagenActivaX + cambioImagenX;
+          nuevoIndexX = Math.max(1, Math.min(totalImagenesHorizontales, nuevoIndexX));
+          ultimaImagenMostrada = imagenesHorizontales[nuevoIndexX];
+          
+          // --- NUEVO: Sincronizar el slider horizontal ---
+          sliderH.value = nuevoIndexX;
+
+        } else {
+          const cambioImagenY = Math.floor(deltaY / (canvas.clientHeight / (totalImagenesVerticales / sensibilidad)));
+          let nuevoIndexY = imagenActivaY - cambioImagenY;
+          nuevoIndexY = Math.max(1, Math.min(totalImagenesVerticales, nuevoIndexY));
+          ultimaImagenMostrada = imagenesVerticales[nuevoIndexY];
+
+          // --- NUEVO: Sincronizar el slider vertical ---
+          sliderV.value = nuevoIndexY;
+        }
+        requestAnimationFrame(() => dibujarImagen(ultimaImagenMostrada));
+      });
+    }
+    window.onload = precargarImagenes;
+  </script>
+
+</body>
+</html>
