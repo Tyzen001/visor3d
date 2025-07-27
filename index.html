@@ -1,266 +1,221 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <title>Gestor de Productos 3D</title>
-    <style>
-        body { font-family: sans-serif; max-width: 800px; margin: 20px auto; background-color: #f4f4f9; color: #333; }
-        .container { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        h1, h2 { color: #1c1e21; }
-        .product-slot { border-top: 1px solid #ddd; padding: 15px 0; }
-        .slot-info { display: flex; justify-content: space-between; align-items: center; }
-        .slot-actions button { margin-left: 10px; }
-        button { padding: 8px 12px; cursor: pointer; border-radius: 5px; border: 1px solid transparent; font-weight: bold; }
-        .btn-delete { background-color: #e74c3c; color: white; }
-        .btn-add { background-color: #2ecc71; color: white; }
-        .btn-upload { background-color: #3498db; color: white; }
-        a { color: #3498db; }
-        #upload-form { margin-top: 20px; padding: 20px; border: 1px dashed #ccc; display: none; }
-        input[type="text"], input[type="file"] { width: 95%; padding: 8px; margin-bottom: 10px; }
-        #progress-container { margin-top: 15px; display: none; }
-        #progress-bar { width: 100%; background-color: #ddd; border-radius: 5px; }
-        #progress-bar-fill { width: 0%; height: 20px; background-color: #4caf50; border-radius: 5px; text-align: center; color: white; line-height: 20px;}
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Visor 3D Interactivo</title>
+  <style>
+    /* --- ESTILOS CSS --- */
+    body {
+      height: 100vh;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      background-color: #000000;
+      color: #ffffff;
+      font-family: monospace;
+    }
+
+    canvas {
+      width: 80%;
+      max-width: 900px;
+      height: auto;
+      aspect-ratio: 16/9;
+      background-color: #1a1a1a;
+      border-radius: 8px;
+      cursor: grab;
+    }
+
+    canvas:active {
+      cursor: grabbing;
+    }
+
+    p {
+      margin-top: 15px;
+      font-size: 1em;
+    }
+
+    /* --- NUEVO: Estilos para los Sliders --- */
+    .controles-slider {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-top: 20px;
+      width: 80%;
+      max-width: 900px;
+    }
+
+    .control-individual {
+      display: flex;
+      align-items: center;
+      width: 100%;
+      margin-bottom: 10px;
+    }
+
+    .control-individual label {
+      margin-right: 15px;
+      width: 80px; /* Ancho fijo para alinear los sliders */
+    }
+    
+    input[type="range"] {
+      width: 100%;
+      cursor: pointer;
+    }
+    /* --- Fin de nuevos estilos --- */
+
+  </style>
 </head>
 <body>
 
-    <div class="container">
-        <h1>Gestor de Productos 3D</h1>
-        <p>Sube y gestiona hasta 3 productos para tu visor 360.</p>
-        
-        <div id="slots-container">
-            <!-- El estado de los slots se cargará aquí con JS -->
-        </div>
+  <canvas id="visor-canvas"></canvas>
+  <p>Arrastra para rotar o usa los controles deslizantes</p>
 
-        <div id="upload-form">
-            <h2 id="form-title">Añadir Nuevo Producto</h2>
-            <label>Elige la ranura (slot) para este producto:</label>
-            <select id="slot-select" style="width: 100%; padding: 8px; margin-bottom: 10px;"></select>
-
-            <label>Nombre del Producto:</label>
-            <input type="text" id="product-name" placeholder="Ej: Zapatillas Rojas Deportivas" required>
-
-            <label>Imágenes Horizontales (selecciónalas en orden):</label>
-            <input type="file" id="horizontal-files" multiple required accept="image/jpeg,image/png,image/webp">
-
-            <label>Imágenes Verticales (selecciónalas en orden):</label>
-            <input type="file" id="vertical-files" multiple required accept="image/jpeg,image/png,image/webp">
-
-            <button class="btn-upload" onclick="handleUpload()">Subir Producto</button>
-            <div id="progress-container">
-                <div id="progress-status">Iniciando subida...</div>
-                <div id="progress-bar"><div id="progress-bar-fill">0%</div></div>
-            </div>
-        </div>
+  <!-- --- NUEVO: Contenedor para los Sliders --- -->
+  <div class="controles-slider">
+    <div class="control-individual">
+      <label for="horizontal-slider">Horizontal:</label>
+      <input type="range" min="1" value="1" id="horizontal-slider">
     </div>
+    <div class="control-individual">
+      <label for="vertical-slider">Vertical:</label>
+      <input type="range" min="1" value="1" id="vertical-slider">
+    </div>
+  </div>
 
-    <!-- SDK de Firebase (ahora necesitamos 'storage' también) -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-storage-compat.js"></script>
 
-    <script>
-        // ===================================================================
-        // PASO 1: PEGA AQUÍ TU CONFIGURACIÓN DE FIREBASE
-        // ===================================================================
-        const firebaseConfig = {
-            apiKey: "TU_API_KEY",
-            authDomain: "TU_PROYECTO.firebaseapp.com",
-            projectId: "TU_PROYECTO_ID",
-            storageBucket: "TU_PROYECTO.appspot.com",
-            messagingSenderId: "TU_SENDER_ID",
-            appId: "TU_APP_ID"
-        };
+  <script>
+    // --- CÓDIGO JAVASCRIPT ---
+    const totalImagenesHorizontales = 85;
+    const totalImagenesVerticales = 85;
+    const rutaHorizontal = 'images/producto_1/horizontal/';
+    const rutaVertical = 'images/producto_1/vertical/';
+    const extensionesPosibles = ['.jpeg', '.jpg', '.png', '.webp'];
 
-        // Inicializar Firebase
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
-        const storage = firebase.storage();
+    const canvas = document.getElementById('visor-canvas');
+    const ctx = canvas.getContext('2d');
+    
+    // --- NUEVO: Obtener los sliders ---
+    const sliderH = document.getElementById('horizontal-slider');
+    const sliderV = document.getElementById('vertical-slider');
 
-        // --- REFERENCIAS A ELEMENTOS DEL DOM ---
-        const slotsContainer = document.getElementById('slots-container');
-        const uploadForm = document.getElementById('upload-form');
-        const slotSelect = document.getElementById('slot-select');
-        const formTitle = document.getElementById('form-title');
-        const progressContainer = document.getElementById('progress-container');
-        const progressStatus = document.getElementById('progress-status');
-        const progressBarFill = document.getElementById('progress-bar-fill');
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
 
-        let productsData = {};
+    const imagenesHorizontales = [];
+    const imagenesVerticales = [];
+    let cargaCompleta = false;
+    let imagenActivaX = 1;
+    let imagenActivaY = 1;
 
-        // --- FUNCIÓN PRINCIPAL DE CARGA ---
-        async function loadManager() {
-            slotsContainer.innerHTML = "Cargando slots...";
-            try {
-                const snapshot = await db.collection("products").get();
-                productsData = {};
-                snapshot.forEach(doc => {
-                    productsData[doc.data().slot] = doc.data();
-                });
-                renderSlots();
-            } catch (error) {
-                console.error("Error cargando productos:", error);
-                slotsContainer.innerHTML = "<p style='color:red;'>Error al cargar datos.</p>";
-            }
+    function cargarImagenConExtensiones(rutaBase, nombreArchivo, enExito, enError) {
+      const img = new Image();
+      let indiceExtension = 0;
+      function probarSiguienteExtension() {
+        if (indiceExtension >= extensionesPosibles.length) {
+          console.error(`Error: No se pudo encontrar la imagen ${nombreArchivo} en ${rutaBase}`);
+          enError();
+          return;
         }
+        const url = `${rutaBase}${nombreArchivo}${extensionesPosibles[indiceExtension]}`;
+        img.src = url;
+        indiceExtension++;
+      }
+      img.onload = () => enExito(img);
+      img.onerror = probarSiguienteExtension;
+      probarSiguienteExtension();
+    }
 
-        // --- RENDERIZAR VISTA DE SLOTS ---
-        function renderSlots() {
-            slotsContainer.innerHTML = '';
-            let emptySlots = [];
+    function precargarImagenes() {
+      let totalImagenes = totalImagenesHorizontales + totalImagenesVerticales;
+      let imagenesCargadas = 0;
+      const alCargarUnaImagen = () => {
+        imagenesCargadas++;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = 'white';
+        ctx.textAlign = 'center';
+        ctx.fillText(`Cargando ${imagenesCargadas} / ${totalImagenes}...`, canvas.width / (2*dpr), canvas.height / (2*dpr));
+        if (imagenesCargadas === totalImagenes) iniciarVisor();
+      };
+      const alOcurrirError = () => { totalImagenes--; if (imagenesCargadas === totalImagenes) iniciarVisor(); };
+      for (let i = 1; i <= totalImagenesHorizontales; i++) {
+        const nombreArchivo = `frame-${i.toString().padStart(5, '0')}`;
+        cargarImagenConExtensiones(rutaHorizontal, nombreArchivo, (img) => { imagenesHorizontales[i] = img; alCargarUnaImagen(); }, alOcurrirError);
+      }
+      for (let i = 1; i <= totalImagenesVerticales; i++) {
+        const nombreArchivo = `frame-${i.toString().padStart(5, '0')}`;
+        cargarImagenConExtensiones(rutaVertical, nombreArchivo, (img) => { imagenesVerticales[i] = img; alCargarUnaImagen(); }, alOcurrirError);
+      }
+    }
 
-            for (let i = 1; i <= 3; i++) {
-                const slotDiv = document.createElement('div');
-                slotDiv.className = 'product-slot';
-                if (productsData[i]) {
-                    const product = productsData[i];
-                    const viewerUrl = `viewer.html?slot=${i}`;
-                    slotDiv.innerHTML = `
-                        <div class="slot-info">
-                            <span><strong>Slot ${i}:</strong> ${product.name}</span>
-                            <div class="slot-actions">
-                                <a href="${viewerUrl}" target="_blank">Ver Visor</a>
-                                <button class="btn-delete" onclick="handleDelete(${i})">Eliminar</button>
-                            </div>
-                        </div>
-                    `;
-                } else {
-                    slotDiv.innerHTML = `
-                        <div class="slot-info">
-                            <span><strong>Slot ${i}:</strong> Vacío</span>
-                            <div class="slot-actions">
-                                <button class="btn-add" onclick="showUploadForm(${i})">Añadir Producto</button>
-                            </div>
-                        </div>
-                    `;
-                    emptySlots.push(i);
-                }
-                slotsContainer.appendChild(slotDiv);
-            }
+    function dibujarImagen(imagen) {
+      if (imagen && imagen.complete) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(imagen, 0, 0, canvas.width / dpr, canvas.height / dpr);
+      }
+    }
 
-            // Configurar el formulario de subida
-            if (emptySlots.length > 0) {
-                slotSelect.innerHTML = emptySlots.map(s => `<option value="${s}">Slot ${s}</option>`).join('');
-            } else {
-                uploadForm.style.display = 'none';
-            }
+    function iniciarVisor() {
+      cargaCompleta = true;
+      // --- NUEVO: Configurar los valores máximos de los sliders ---
+      sliderH.max = totalImagenesHorizontales;
+      sliderV.max = totalImagenesVerticales;
+      
+      dibujarImagen(imagenesHorizontales[1] || imagenesVerticales[1]);
+      
+      let arrastrando = false;
+      let inicioX, inicioY;
+      const sensibilidad = 2;
+
+      // --- LÓGICA DE LOS SLIDERS ---
+      sliderH.addEventListener('input', (e) => {
+        imagenActivaX = parseInt(e.target.value);
+        dibujarImagen(imagenesHorizontales[imagenActivaX]);
+      });
+
+      sliderV.addEventListener('input', (e) => {
+        imagenActivaY = parseInt(e.target.value);
+        dibujarImagen(imagenesVerticales[imagenActivaY]);
+      });
+
+      // --- LÓGICA DEL MOUSE ---
+      canvas.addEventListener('mousedown', (e) => { arrastrando = true; inicioX = e.clientX; inicioY = e.clientY; canvas.style.cursor = 'grabbing'; });
+      canvas.addEventListener('mouseup', () => { arrastrando = false; canvas.style.cursor = 'grab'; });
+      canvas.addEventListener('mouseleave', () => { arrastrando = false; canvas.style.cursor = 'grab'; });
+
+      canvas.addEventListener('mousemove', (e) => {
+        if (!arrastrando || !cargaCompleta) return;
+        const deltaX = e.clientX - inicioX;
+        const deltaY = e.clientY - inicioY;
+        let ultimaImagenMostrada;
+
+        if (Math.abs(deltaX) > Math.abs(deltaY)) {
+          const cambioImagenX = Math.floor(deltaX / (canvas.clientWidth / (totalImagenesHorizontales / sensibilidad)));
+          let nuevoIndexX = imagenActivaX + cambioImagenX;
+          nuevoIndexX = Math.max(1, Math.min(totalImagenesHorizontales, nuevoIndexX));
+          ultimaImagenMostrada = imagenesHorizontales[nuevoIndexX];
+          
+          // --- NUEVO: Sincronizar el slider horizontal ---
+          sliderH.value = nuevoIndexX;
+
+        } else {
+          const cambioImagenY = Math.floor(deltaY / (canvas.clientHeight / (totalImagenesVerticales / sensibilidad)));
+          let nuevoIndexY = imagenActivaY - cambioImagenY;
+          nuevoIndexY = Math.max(1, Math.min(totalImagenesVerticales, nuevoIndexY));
+          ultimaImagenMostrada = imagenesVerticales[nuevoIndexY];
+
+          // --- NUEVO: Sincronizar el slider vertical ---
+          sliderV.value = nuevoIndexY;
         }
+        requestAnimationFrame(() => dibujarImagen(ultimaImagenMostrada));
+      });
+    }
+    window.onload = precargarImagenes;
+  </script>
 
-        function showUploadForm(slot) {
-            uploadForm.style.display = 'block';
-            slotSelect.value = slot;
-            formTitle.innerText = `Añadir Producto al Slot ${slot}`;
-        }
-
-        // --- LÓGICA DE SUBIDA ---
-        async function handleUpload() {
-            const slot = slotSelect.value;
-            const name = document.getElementById('product-name').value;
-            const horizontalFiles = document.getElementById('horizontal-files').files;
-            const verticalFiles = document.getElementById('vertical-files').files;
-
-            if (!name || horizontalFiles.length === 0 || verticalFiles.length === 0) {
-                alert("Por favor, completa todos los campos y selecciona las imágenes.");
-                return;
-            }
-
-            progressContainer.style.display = 'block';
-
-            try {
-                const productPath = `product_${slot}`;
-                
-                // Subir imágenes horizontales
-                const totalFiles = horizontalFiles.length + verticalFiles.length;
-                let uploadedCount = 0;
-                
-                for(let i = 0; i < horizontalFiles.length; i++) {
-                    const file = horizontalFiles[i];
-                    const filePath = `${productPath}/horizontal/h_${String(i + 1).padStart(3, '0')}.jpg`;
-                    await storage.ref(filePath).put(file);
-                    uploadedCount++;
-                    updateProgress(uploadedCount, totalFiles, `Subiendo horizontal ${i+1}/${horizontalFiles.length}`);
-                }
-                
-                // Subir imágenes verticales
-                for(let i = 0; i < verticalFiles.length; i++) {
-                    const file = verticalFiles[i];
-                    const filePath = `${productPath}/vertical/v_${String(i + 1).padStart(3, '0')}.jpg`;
-                    await storage.ref(filePath).put(file);
-                    uploadedCount++;
-                    updateProgress(uploadedCount, totalFiles, `Subiendo vertical ${i+1}/${verticalFiles.length}`);
-                }
-
-                // Guardar en Firestore
-                progressStatus.innerText = "Guardando información del producto...";
-                await db.collection("products").doc(`product_${slot}`).set({
-                    name: name,
-                    path: productPath,
-                    framesHorizontal: horizontalFiles.length,
-                    framesVertical: verticalFiles.length,
-                    slot: parseInt(slot)
-                });
-                
-                alert("¡Producto subido y configurado con éxito!");
-                uploadForm.style.display = 'none';
-                document.getElementById('upload-form').reset();
-                progressContainer.style.display = 'none';
-                loadManager(); // Recargar la vista
-
-            } catch (error) {
-                console.error("Error en la subida:", error);
-                alert("Hubo un error durante la subida. Revisa la consola para más detalles.");
-                progressContainer.style.display = 'none';
-            }
-        }
-
-        function updateProgress(uploaded, total, message) {
-            const percentage = Math.round((uploaded / total) * 100);
-            progressBarFill.style.width = `${percentage}%`;
-            progressBarFill.innerText = `${percentage}%`;
-            progressStatus.innerText = message;
-        }
-
-        // --- LÓGICA DE BORRADO ---
-        async function handleDelete(slot) {
-            if (!confirm(`¿Estás seguro de que quieres eliminar el Producto ${slot}? Esto borrará TODAS sus imágenes de Firebase.`)) {
-                return;
-            }
-
-            try {
-                const product = productsData[slot];
-                if (!product) {
-                    alert("El producto no existe.");
-                    return;
-                }
-                
-                alert("Iniciando borrado... Esto puede tardar unos segundos. No cierres la página.");
-                
-                const productPath = product.path;
-                const h_ref = storage.ref(`${productPath}/horizontal`);
-                const v_ref = storage.ref(`${productPath}/vertical`);
-                
-                // Borrar todos los archivos de las carpetas
-                const h_files = await h_ref.listAll();
-                const v_files = await v_ref.listAll();
-                const deletePromises = h_files.items.map(item => item.delete())
-                                     .concat(v_files.items.map(item => item.delete()));
-
-                await Promise.all(deletePromises);
-                
-                // Borrar el documento de Firestore
-                await db.collection("products").doc(`product_${slot}`).delete();
-
-                alert("¡Producto eliminado con éxito!");
-                loadManager(); // Recargar la vista
-
-            } catch (error) {
-                console.error("Error al eliminar:", error);
-                alert("Hubo un error al eliminar el producto. Revisa la consola.");
-            }
-        }
-
-        // --- INICIAR EL GESTOR AL CARGAR LA PÁGINA ---
-        document.addEventListener('DOMContentLoaded', loadManager);
-    </script>
 </body>
 </html>
