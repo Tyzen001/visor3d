@@ -6,21 +6,13 @@
   <title>Visor 3D Interactivo</title>
   <style>
     :root {
-      --bg-color: #000000;
-      --text-color: #ffffff;
-      --canvas-bg: #1a1a1a;
-      --slider-track: #444;
-      --slider-thumb: #ffffff;
-      --control-bg: rgba(25, 25, 25, 0.4);
+      --bg-color: #000000; --text-color: #ffffff; --canvas-bg: #1a1a1a;
+      --slider-track: #444; --slider-thumb: #ffffff; --control-bg: rgba(25, 25, 25, 0.4);
       --control-border: #444;
     }
     .light-theme {
-      --bg-color: #f0f0f0;
-      --text-color: #000000;
-      --canvas-bg: #ffffff;
-      --slider-track: #ccc;
-      --slider-thumb: #333;
-      --control-bg: rgba(255, 255, 255, 0.4);
+      --bg-color: #f0f0f0; --text-color: #000000; --canvas-bg: #ffffff;
+      --slider-track: #ccc; --slider-thumb: #333; --control-bg: rgba(255, 255, 255, 0.4);
       --control-border: #ddd;
     }
     html, body {
@@ -75,137 +67,128 @@
   <div class="visor-container">
     <p class="loading-text" id="loading-text">Iniciando...</p>
     <canvas id="visor-canvas"></canvas>
-
     <div class="top-controls">
         <a href="index.html" class="icon-button" title="Volver al Catálogo">←</a>
         <button id="theme-toggle" class="icon-button" title="Cambiar Tema">
             <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
         </button>
     </div>
-
     <div class="controls-overlay">
-      <div class="control-individual"><label for="horizontal-slider">Horizontal:</label><input type="range" min="1" value="1" id="horizontal-slider"></div>
-      <div class="control-individual"><label for="vertical-slider">Vertical:</label><input type="range" min="1" value="1" id="vertical-slider"></div>
+      <div class="control-individual"><label for="horizontal-slider">Horizontal:</label><input type="range" min="0" value="0" id="horizontal-slider"></div>
+      <div class="control-individual"><label for="vertical-slider">Vertical:</label><input type="range" min="0" value="0" id="vertical-slider"></div>
     </div>
   </div>
 
   <script>
-    // --- LÓGICA DE CARGA ORIGINAL - LA QUE SÍ FUNCIONABA ---
+    // --- LÓGICA DE CARGA DINÁMICA - SIN LÍMITES ---
     const urlParams = new URLSearchParams(window.location.search);
     const nombreProducto = urlParams.get('producto') || 'producto_1';
-    
-    const rutaHorizontal = `images/${nombreProducto}/horizontal/`;
-    const rutaVertical = `images/${nombreProducto}/vertical/`;
-    
-    const totalImagenesHorizontales = 85; // Se mantiene la lógica original
-    const totalImagenesVerticales = 85;   // de un número fijo de imágenes.
     const extensionesPosibles = ['.jpeg', '.jpg', '.png', '.webp'];
 
-    const canvas = document.getElementById('visor-canvas');
-    const ctx = canvas.getContext('2d');
-    const sliderH = document.getElementById('horizontal-slider');
-    const sliderV = document.getElementById('vertical-slider');
+    const canvas = document.getElementById('visor-canvas'), ctx = canvas.getContext('2d');
+    const sliderH = document.getElementById('horizontal-slider'), sliderV = document.getElementById('vertical-slider');
     const loadingText = document.getElementById('loading-text');
 
-    const imagenesHorizontales = [], imagenesVerticales = [];
-    let cargaCompleta = false, imagenActivaX = 1, imagenActivaY = 1;
+    let imagenesH = [], imagenesV = [];
+    let imagenActivaX = 0, imagenActivaY = 0;
 
-    // Esta es la función de carga que funcionaba antes, sin cambios en su lógica.
-    function cargarImagenConExtensiones(rutaBase, nombreArchivo, enExito, enError) {
-        const img = new Image();
-        let indiceExtension = 0;
-        function probarSiguienteExtension() {
-            if (indiceExtension >= extensionesPosibles.length) {
-                enError();
-                return;
+    // Función robusta para cargar una imagen probando extensiones
+    function cargarUnaImagen(rutaBase, nombreFrame) {
+        return new Promise(resolve => {
+            const img = new Image();
+            let extIndex = 0;
+            function probarSiguiente() {
+                if (extIndex >= extensionesPosibles.length) {
+                    resolve(null); // No se encontró ninguna imagen con las extensiones dadas
+                    return;
+                }
+                img.src = `${rutaBase}${nombreFrame}${extensionesPosibles[extIndex]}`;
+                extIndex++;
             }
-            const url = `${rutaBase}${nombreArchivo}${extensionesPosibles[indiceExtension]}`;
-            img.src = url;
-            indiceExtension++;
+            img.onload = () => resolve(img);
+            img.onerror = probarSiguiente;
+            probarSiguiente();
+        });
+    }
+    
+    // Función que carga TODAS las imágenes en una carpeta hasta que no encuentra más
+    async function cargarSecuenciaCompleta(rutaBase) {
+        const secuencia = [];
+        let i = 1;
+        while (true) {
+            const nombreFrame = `frame-${i.toString().padStart(5, '0')}`;
+            const imagen = await cargarUnaImagen(rutaBase, nombreFrame);
+            if (imagen) {
+                secuencia.push(imagen);
+                loadingText.textContent = `Cargando '${nombreProducto}': ${secuencia.length} imágenes...`;
+                i++;
+            } else {
+                break; // Se detiene el bucle cuando ya no se encuentran más imágenes
+            }
         }
-        img.onload = () => enExito(img);
-        img.onerror = probarSiguienteExtension;
-        probarSiguienteExtension();
+        return secuencia;
     }
 
-    function precargarImagenes() {
-        let totalImagenes = totalImagenesHorizontales + totalImagenesVerticales;
-        let imagenesCargadas = 0;
-        
-        const alCargarUnaImagen = () => {
-            imagenesCargadas++;
-            loadingText.textContent = `Cargando '${nombreProducto}': ${imagenesCargadas} de ${totalImagenes}...`;
-            if (imagenesCargadas === totalImagenes) {
-                iniciarVisor();
-            }
-        };
+    async function initialize() {
+        imagenesH = await cargarSecuenciaCompleta(`images/${nombreProducto}/horizontal/`);
+        imagenesV = await cargarSecuenciaCompleta(`images/${nombreProducto}/vertical/`);
 
-        const alOcurrirError = () => {
-            totalImagenes--;
-            if (imagenesCargadas === totalImagenes) {
-                iniciarVisor();
-            }
-        };
-
-        for (let i = 1; i <= totalImagenesHorizontales; i++) {
-            const nombreArchivo = `frame-${i.toString().padStart(5, '0')}`;
-            cargarImagenConExtensiones(rutaHorizontal, nombreArchivo, img => { imagenesHorizontales[i] = img; alCargarUnaImagen(); }, alOcurrirError);
+        if (imagenesH.length === 0 && imagenesV.length === 0) {
+            loadingText.textContent = `Error: No se encontraron imágenes para '${nombreProducto}'.`;
+            return;
         }
-
-        for (let i = 1; i <= totalImagenesVerticales; i++) {
-            const nombreArchivo = `frame-${i.toString().padStart(5, '0')}`;
-            cargarImagenConExtensiones(rutaVertical, nombreArchivo, img => { imagenesVerticales[i] = img; alCargarUnaImagen(); }, alOcurrirError);
-        }
+        loadingText.style.display = 'none';
+        iniciarVisor();
     }
-
-    function dibujarImagen(imagen) {
-        if (imagen && imagen.complete) {
-            canvas.width = imagen.naturalWidth;
-            canvas.height = imagen.naturalHeight;
-            ctx.drawImage(imagen, 0, 0, canvas.width, canvas.height);
-        }
-    }
-
+    
     function iniciarVisor() {
-        loadingText.style.display = 'none'; // Oculta el texto de "cargando"
-        cargaCompleta = true;
-        sliderH.max = totalImagenesHorizontales;
-        sliderV.max = totalImagenesVerticales;
+        const primeraImagen = imagenesH[0] || imagenesV[0];
+        if (!primeraImagen) return;
+
+        canvas.width = primeraImagen.naturalWidth;
+        canvas.height = primeraImagen.naturalHeight;
         
-        dibujarImagen(imagenesHorizontales[1] || imagenesVerticales[1]);
-        
+        // El máximo del slider ahora es el número de imágenes encontradas menos uno
+        sliderH.max = imagenesH.length > 1 ? imagenesH.length - 1 : 0;
+        sliderV.max = imagenesV.length > 1 ? imagenesV.length - 1 : 0;
+
         let arrastrando = false, inicioX, inicioY;
         const sensibilidad = 2;
+        
+        function dibujarImagen(img) {
+            if (img && img.complete) ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        }
+        
+        dibujarImagen(primeraImagen);
 
-        sliderH.addEventListener('input', e => { imagenActivaX = parseInt(e.target.value); dibujarImagen(imagenesHorizontales[imagenActivaX]); });
-        sliderV.addEventListener('input', e => { imagenActivaY = parseInt(e.target.value); dibujarImagen(imagenesVerticales[imagenActivaY]); });
+        sliderH.addEventListener('input', e => { imagenActivaX = parseInt(e.target.value); dibujarImagen(imagenesH[imagenActivaX]); });
+        sliderV.addEventListener('input', e => { imagenActivaY = parseInt(e.target.value); dibujarImagen(imagenesV[imagenActivaY]); });
         
         canvas.addEventListener('mousedown', e => { arrastrando = true; inicioX = e.clientX; inicioY = e.clientY; canvas.style.cursor = 'grabbing'; });
         canvas.addEventListener('mouseup', () => { arrastrando = false; canvas.style.cursor = 'grab'; });
         canvas.addEventListener('mouseleave', () => { arrastrando = false; canvas.style.cursor = 'grab'; });
 
         canvas.addEventListener('mousemove', e => {
-            if (!arrastrando || !cargaCompleta) return;
-            const deltaX = e.clientX - inicioX;
-            const deltaY = e.clientY - inicioY;
-            let ultimaImagenMostrada;
+            if (!arrastrando) return;
+            const deltaX = e.clientX - inicioX, deltaY = e.clientY - inicioY;
             if (Math.abs(deltaX) > Math.abs(deltaY)) {
-                const cambioImagenX = Math.floor(deltaX / (canvas.clientWidth / (totalImagenesHorizontales / sensibilidad)));
-                let nuevoIndexX = imagenActivaX + cambioImagenX;
-                nuevoIndexX = Math.max(1, Math.min(totalImagenesHorizontales, nuevoIndexX));
-                ultimaImagenMostrada = imagenesHorizontales[nuevoIndexX];
-                sliderH.value = nuevoIndexX;
+                if (imagenesH.length < 2) return;
+                const cambio = Math.floor(deltaX / (canvas.clientWidth / (imagenesH.length / sensibilidad)));
+                let nuevoIndex = imagenActivaX + cambio;
+                imagenActivaX = Math.max(0, Math.min(imagenesH.length - 1, nuevoIndex));
+                sliderH.value = imagenActivaX;
+                requestAnimationFrame(() => dibujarImagen(imagenesH[imagenActivaX]));
             } else {
-                const cambioImagenY = Math.floor(deltaY / (canvas.clientHeight / (totalImagenesVerticales / sensibilidad)));
-                let nuevoIndexY = imagenActivaY - cambioImagenY;
-                nuevoIndexY = Math.max(1, Math.min(totalImagenesVerticales, nuevoIndexY));
-                ultimaImagenMostrada = imagenesVerticales[nuevoIndexY];
-                sliderV.value = nuevoIndexY;
+                if (imagenesV.length < 2) return;
+                const cambio = Math.floor(deltaY / (canvas.clientHeight / (imagenesV.length / sensibilidad)));
+                let nuevoIndex = imagenActivaY - cambio;
+                imagenActivaY = Math.max(0, Math.min(imagenesV.length - 1, nuevoIndex));
+                sliderV.value = imagenActivaY;
+                requestAnimationFrame(() => dibujarImagen(imagenesV[imagenActivaY]));
             }
-            requestAnimationFrame(() => dibujarImagen(ultimaImagenMostrada));
         });
     }
-    
+
     const themeToggle = document.getElementById('theme-toggle');
     const currentTheme = localStorage.getItem('theme');
     if (currentTheme === 'light') document.body.classList.add('light-theme');
@@ -215,7 +198,7 @@
         localStorage.setItem('theme', document.body.classList.contains('light-theme') ? 'light' : 'dark');
     });
 
-    window.onload = precargarImagenes;
+    initialize();
   </script>
 </body>
 </html>
