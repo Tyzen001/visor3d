@@ -2,220 +2,220 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Visor 3D Interactivo</title>
   <style>
-    /* --- ESTILOS CSS --- */
-    body {
-      height: 100vh;
-      margin: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-direction: column;
-      background-color: #000000;
-      color: #ffffff;
-      font-family: monospace;
+    :root {
+      --bg-color: #000000;
+      --text-color: #ffffff;
+      --canvas-bg: #1a1a1a;
+      --slider-track: #444;
+      --slider-thumb: #ffffff;
+      --control-bg: rgba(25, 25, 25, 0.4);
+      --control-border: #444;
     }
-
+    .light-theme {
+      --bg-color: #f0f0f0;
+      --text-color: #000000;
+      --canvas-bg: #ffffff;
+      --slider-track: #ccc;
+      --slider-thumb: #333;
+      --control-bg: rgba(255, 255, 255, 0.4);
+      --control-border: #ddd;
+    }
+    html, body {
+      height: 100%; width: 100%; margin: 0; overflow: hidden;
+      background-color: var(--bg-color); color: var(--text-color); font-family: monospace;
+      display: flex; justify-content: center; align-items: center;
+    }
+    .visor-container {
+      width: 100%; height: 100%; display: flex;
+      justify-content: center; align-items: center; position: relative;
+    }
     canvas {
-      width: 80%;
-      max-width: 900px;
-      height: auto;
-      aspect-ratio: 16/9;
-      background-color: #1a1a1a;
-      border-radius: 8px;
-      cursor: grab;
+      max-width: 100%; max-height: 100%; width: auto; height: auto;
+      object-fit: contain; cursor: grab;
     }
-
-    canvas:active {
-      cursor: grabbing;
+    canvas:active { cursor: grabbing; }
+    .controls-overlay {
+      position: absolute; bottom: 0; left: 0; width: 100%;
+      padding: 20px 40px; box-sizing: border-box; background: var(--control-bg);
+      backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+      display: flex; flex-direction: column; gap: 15px;
     }
-
-    p {
-      margin-top: 15px;
-      font-size: 1em;
-    }
-
-    /* --- NUEVO: Estilos para los Sliders --- */
-    .controles-slider {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      margin-top: 20px;
-      width: 80%;
-      max-width: 900px;
-    }
-
-    .control-individual {
-      display: flex;
-      align-items: center;
-      width: 100%;
-      margin-bottom: 10px;
-    }
-
-    .control-individual label {
-      margin-right: 15px;
-      width: 80px; /* Ancho fijo para alinear los sliders */
-    }
-    
+    .control-individual { display: flex; align-items: center; gap: 15px; }
+    .control-individual label { width: 80px; }
     input[type="range"] {
-      width: 100%;
-      cursor: pointer;
+      -webkit-appearance: none; appearance: none; width: 100%; height: 4px;
+      background: var(--slider-track); border-radius: 2px; outline: none;
     }
-    /* --- Fin de nuevos estilos --- */
-
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; appearance: none; width: 20px; height: 20px;
+      background: var(--slider-thumb); border-radius: 50%; cursor: pointer; border: 2px solid var(--slider-track);
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 18px; height: 18px; background: var(--slider-thumb);
+      border-radius: 50%; cursor: pointer; border: 2px solid var(--slider-track);
+    }
+    .top-controls {
+      position: absolute; top: 20px; left: 20px; right: 20px;
+      display: flex; justify-content: space-between; align-items: center; z-index: 10;
+    }
+    .icon-button {
+      background: var(--control-bg); backdrop-filter: blur(10px); border: 1px solid var(--control-border);
+      border-radius: 50%; width: 40px; height: 40px; cursor: pointer;
+      display: flex; justify-content: center; align-items: center; color: var(--text-color);
+      text-decoration: none; font-size: 1.5em;
+    }
+    .loading-text { position: absolute; font-size: 1.5em; text-align: center; }
   </style>
 </head>
 <body>
 
-  <canvas id="visor-canvas"></canvas>
-  <p>Arrastra para rotar o usa los controles deslizantes</p>
+  <div class="visor-container">
+    <p class="loading-text" id="loading-text">Iniciando...</p>
+    <canvas id="visor-canvas"></canvas>
 
-  <!-- --- NUEVO: Contenedor para los Sliders --- -->
-  <div class="controles-slider">
-    <div class="control-individual">
-      <label for="horizontal-slider">Horizontal:</label>
-      <input type="range" min="1" value="1" id="horizontal-slider">
+    <div class="top-controls">
+        <a href="index.html" class="icon-button" title="Volver al Catálogo">←</a>
+        <button id="theme-toggle" class="icon-button" title="Cambiar Tema">
+            <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        </button>
     </div>
-    <div class="control-individual">
-      <label for="vertical-slider">Vertical:</label>
-      <input type="range" min="1" value="1" id="vertical-slider">
+
+    <div class="controls-overlay">
+      <div class="control-individual"><label for="horizontal-slider">Horizontal:</label><input type="range" min="1" value="1" id="horizontal-slider"></div>
+      <div class="control-individual"><label for="vertical-slider">Vertical:</label><input type="range" min="1" value="1" id="vertical-slider"></div>
     </div>
   </div>
 
-
   <script>
-    // --- CÓDIGO JAVASCRIPT ---
-    const totalImagenesHorizontales = 85;
-    const totalImagenesVerticales = 85;
-    const rutaHorizontal = 'images/producto_1/horizontal/';
-    const rutaVertical = 'images/producto_1/vertical/';
+    // --- LÓGICA DE CARGA ORIGINAL - LA QUE SÍ FUNCIONABA ---
+    const urlParams = new URLSearchParams(window.location.search);
+    const nombreProducto = urlParams.get('producto') || 'producto_1';
+    
+    const rutaHorizontal = `images/${nombreProducto}/horizontal/`;
+    const rutaVertical = `images/${nombreProducto}/vertical/`;
+    
+    const totalImagenesHorizontales = 85; // Se mantiene la lógica original
+    const totalImagenesVerticales = 85;   // de un número fijo de imágenes.
     const extensionesPosibles = ['.jpeg', '.jpg', '.png', '.webp'];
 
     const canvas = document.getElementById('visor-canvas');
     const ctx = canvas.getContext('2d');
-    
-    // --- NUEVO: Obtener los sliders ---
     const sliderH = document.getElementById('horizontal-slider');
     const sliderV = document.getElementById('vertical-slider');
+    const loadingText = document.getElementById('loading-text');
 
-    const dpr = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
-    ctx.scale(dpr, dpr);
+    const imagenesHorizontales = [], imagenesVerticales = [];
+    let cargaCompleta = false, imagenActivaX = 1, imagenActivaY = 1;
 
-    const imagenesHorizontales = [];
-    const imagenesVerticales = [];
-    let cargaCompleta = false;
-    let imagenActivaX = 1;
-    let imagenActivaY = 1;
-
+    // Esta es la función de carga que funcionaba antes, sin cambios en su lógica.
     function cargarImagenConExtensiones(rutaBase, nombreArchivo, enExito, enError) {
-      const img = new Image();
-      let indiceExtension = 0;
-      function probarSiguienteExtension() {
-        if (indiceExtension >= extensionesPosibles.length) {
-          console.error(`Error: No se pudo encontrar la imagen ${nombreArchivo} en ${rutaBase}`);
-          enError();
-          return;
+        const img = new Image();
+        let indiceExtension = 0;
+        function probarSiguienteExtension() {
+            if (indiceExtension >= extensionesPosibles.length) {
+                enError();
+                return;
+            }
+            const url = `${rutaBase}${nombreArchivo}${extensionesPosibles[indiceExtension]}`;
+            img.src = url;
+            indiceExtension++;
         }
-        const url = `${rutaBase}${nombreArchivo}${extensionesPosibles[indiceExtension]}`;
-        img.src = url;
-        indiceExtension++;
-      }
-      img.onload = () => enExito(img);
-      img.onerror = probarSiguienteExtension;
-      probarSiguienteExtension();
+        img.onload = () => enExito(img);
+        img.onerror = probarSiguienteExtension;
+        probarSiguienteExtension();
     }
 
     function precargarImagenes() {
-      let totalImagenes = totalImagenesHorizontales + totalImagenesVerticales;
-      let imagenesCargadas = 0;
-      const alCargarUnaImagen = () => {
-        imagenesCargadas++;
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = 'white';
-        ctx.textAlign = 'center';
-        ctx.fillText(`Cargando ${imagenesCargadas} / ${totalImagenes}...`, canvas.width / (2*dpr), canvas.height / (2*dpr));
-        if (imagenesCargadas === totalImagenes) iniciarVisor();
-      };
-      const alOcurrirError = () => { totalImagenes--; if (imagenesCargadas === totalImagenes) iniciarVisor(); };
-      for (let i = 1; i <= totalImagenesHorizontales; i++) {
-        const nombreArchivo = `frame-${i.toString().padStart(5, '0')}`;
-        cargarImagenConExtensiones(rutaHorizontal, nombreArchivo, (img) => { imagenesHorizontales[i] = img; alCargarUnaImagen(); }, alOcurrirError);
-      }
-      for (let i = 1; i <= totalImagenesVerticales; i++) {
-        const nombreArchivo = `frame-${i.toString().padStart(5, '0')}`;
-        cargarImagenConExtensiones(rutaVertical, nombreArchivo, (img) => { imagenesVerticales[i] = img; alCargarUnaImagen(); }, alOcurrirError);
-      }
+        let totalImagenes = totalImagenesHorizontales + totalImagenesVerticales;
+        let imagenesCargadas = 0;
+        
+        const alCargarUnaImagen = () => {
+            imagenesCargadas++;
+            loadingText.textContent = `Cargando '${nombreProducto}': ${imagenesCargadas} de ${totalImagenes}...`;
+            if (imagenesCargadas === totalImagenes) {
+                iniciarVisor();
+            }
+        };
+
+        const alOcurrirError = () => {
+            totalImagenes--;
+            if (imagenesCargadas === totalImagenes) {
+                iniciarVisor();
+            }
+        };
+
+        for (let i = 1; i <= totalImagenesHorizontales; i++) {
+            const nombreArchivo = `frame-${i.toString().padStart(5, '0')}`;
+            cargarImagenConExtensiones(rutaHorizontal, nombreArchivo, img => { imagenesHorizontales[i] = img; alCargarUnaImagen(); }, alOcurrirError);
+        }
+
+        for (let i = 1; i <= totalImagenesVerticales; i++) {
+            const nombreArchivo = `frame-${i.toString().padStart(5, '0')}`;
+            cargarImagenConExtensiones(rutaVertical, nombreArchivo, img => { imagenesVerticales[i] = img; alCargarUnaImagen(); }, alOcurrirError);
+        }
     }
 
     function dibujarImagen(imagen) {
-      if (imagen && imagen.complete) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(imagen, 0, 0, canvas.width / dpr, canvas.height / dpr);
-      }
+        if (imagen && imagen.complete) {
+            canvas.width = imagen.naturalWidth;
+            canvas.height = imagen.naturalHeight;
+            ctx.drawImage(imagen, 0, 0, canvas.width, canvas.height);
+        }
     }
 
     function iniciarVisor() {
-      cargaCompleta = true;
-      // --- NUEVO: Configurar los valores máximos de los sliders ---
-      sliderH.max = totalImagenesHorizontales;
-      sliderV.max = totalImagenesVerticales;
-      
-      dibujarImagen(imagenesHorizontales[1] || imagenesVerticales[1]);
-      
-      let arrastrando = false;
-      let inicioX, inicioY;
-      const sensibilidad = 2;
+        loadingText.style.display = 'none'; // Oculta el texto de "cargando"
+        cargaCompleta = true;
+        sliderH.max = totalImagenesHorizontales;
+        sliderV.max = totalImagenesVerticales;
+        
+        dibujarImagen(imagenesHorizontales[1] || imagenesVerticales[1]);
+        
+        let arrastrando = false, inicioX, inicioY;
+        const sensibilidad = 2;
 
-      // --- LÓGICA DE LOS SLIDERS ---
-      sliderH.addEventListener('input', (e) => {
-        imagenActivaX = parseInt(e.target.value);
-        dibujarImagen(imagenesHorizontales[imagenActivaX]);
-      });
+        sliderH.addEventListener('input', e => { imagenActivaX = parseInt(e.target.value); dibujarImagen(imagenesHorizontales[imagenActivaX]); });
+        sliderV.addEventListener('input', e => { imagenActivaY = parseInt(e.target.value); dibujarImagen(imagenesVerticales[imagenActivaY]); });
+        
+        canvas.addEventListener('mousedown', e => { arrastrando = true; inicioX = e.clientX; inicioY = e.clientY; canvas.style.cursor = 'grabbing'; });
+        canvas.addEventListener('mouseup', () => { arrastrando = false; canvas.style.cursor = 'grab'; });
+        canvas.addEventListener('mouseleave', () => { arrastrando = false; canvas.style.cursor = 'grab'; });
 
-      sliderV.addEventListener('input', (e) => {
-        imagenActivaY = parseInt(e.target.value);
-        dibujarImagen(imagenesVerticales[imagenActivaY]);
-      });
-
-      // --- LÓGICA DEL MOUSE ---
-      canvas.addEventListener('mousedown', (e) => { arrastrando = true; inicioX = e.clientX; inicioY = e.clientY; canvas.style.cursor = 'grabbing'; });
-      canvas.addEventListener('mouseup', () => { arrastrando = false; canvas.style.cursor = 'grab'; });
-      canvas.addEventListener('mouseleave', () => { arrastrando = false; canvas.style.cursor = 'grab'; });
-
-      canvas.addEventListener('mousemove', (e) => {
-        if (!arrastrando || !cargaCompleta) return;
-        const deltaX = e.clientX - inicioX;
-        const deltaY = e.clientY - inicioY;
-        let ultimaImagenMostrada;
-
-        if (Math.abs(deltaX) > Math.abs(deltaY)) {
-          const cambioImagenX = Math.floor(deltaX / (canvas.clientWidth / (totalImagenesHorizontales / sensibilidad)));
-          let nuevoIndexX = imagenActivaX + cambioImagenX;
-          nuevoIndexX = Math.max(1, Math.min(totalImagenesHorizontales, nuevoIndexX));
-          ultimaImagenMostrada = imagenesHorizontales[nuevoIndexX];
-          
-          // --- NUEVO: Sincronizar el slider horizontal ---
-          sliderH.value = nuevoIndexX;
-
-        } else {
-          const cambioImagenY = Math.floor(deltaY / (canvas.clientHeight / (totalImagenesVerticales / sensibilidad)));
-          let nuevoIndexY = imagenActivaY - cambioImagenY;
-          nuevoIndexY = Math.max(1, Math.min(totalImagenesVerticales, nuevoIndexY));
-          ultimaImagenMostrada = imagenesVerticales[nuevoIndexY];
-
-          // --- NUEVO: Sincronizar el slider vertical ---
-          sliderV.value = nuevoIndexY;
-        }
-        requestAnimationFrame(() => dibujarImagen(ultimaImagenMostrada));
-      });
+        canvas.addEventListener('mousemove', e => {
+            if (!arrastrando || !cargaCompleta) return;
+            const deltaX = e.clientX - inicioX;
+            const deltaY = e.clientY - inicioY;
+            let ultimaImagenMostrada;
+            if (Math.abs(deltaX) > Math.abs(deltaY)) {
+                const cambioImagenX = Math.floor(deltaX / (canvas.clientWidth / (totalImagenesHorizontales / sensibilidad)));
+                let nuevoIndexX = imagenActivaX + cambioImagenX;
+                nuevoIndexX = Math.max(1, Math.min(totalImagenesHorizontales, nuevoIndexX));
+                ultimaImagenMostrada = imagenesHorizontales[nuevoIndexX];
+                sliderH.value = nuevoIndexX;
+            } else {
+                const cambioImagenY = Math.floor(deltaY / (canvas.clientHeight / (totalImagenesVerticales / sensibilidad)));
+                let nuevoIndexY = imagenActivaY - cambioImagenY;
+                nuevoIndexY = Math.max(1, Math.min(totalImagenesVerticales, nuevoIndexY));
+                ultimaImagenMostrada = imagenesVerticales[nuevoIndexY];
+                sliderV.value = nuevoIndexY;
+            }
+            requestAnimationFrame(() => dibujarImagen(ultimaImagenMostrada));
+        });
     }
+    
+    const themeToggle = document.getElementById('theme-toggle');
+    const currentTheme = localStorage.getItem('theme');
+    if (currentTheme === 'light') document.body.classList.add('light-theme');
+    
+    themeToggle.addEventListener('click', () => {
+        document.body.classList.toggle('light-theme');
+        localStorage.setItem('theme', document.body.classList.contains('light-theme') ? 'light' : 'dark');
+    });
+
     window.onload = precargarImagenes;
   </script>
-
 </body>
 </html>
